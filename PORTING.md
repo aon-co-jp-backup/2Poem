@@ -8,3 +8,9 @@
 
 ## お引越し・再開用メッセージ
 `F:\2Poem` を開き、`python -m pytest -q` と `python -m topoem scan examples/flask_app.py` で動作確認。未了は README の「未了」を参照。
+
+## 2026-11-17 追記 / Addendum (v0.1.1)
+**日本語**: v0.1.1 = 生成物へ open-cpu 同梱(`--no-open-cpu`で外す)、`deps --apply --verify "<試験>"`(失敗時は`.2poem.bak`から自動復元)。aruaru-llm は VPS で推論が遅く(GPT-2 で60秒超)共有基盤方針にも反するため**同梱しない**。RMojo の更新機能は WSL(Ubuntu)で実リリース v0.4.3 の tar.gz を取得・SHA-256 検証・置換まで成功。**未了**: macOS/Android/iOS での更新試験、利用者自身の Flask/Django/React 構成の自動アップグレード(今は`deps --apply`のみ)、業務ロジックの自動移植、生成 RPoem プロジェクトの CI 確認、PyPI 公開(将来対応)。
+**再開用メッセージ**: 「`F:\2Poem` と `F:\runo` を開き、`python -m pytest -q`(20件)で確認。PORTING.md 2026-11-17 追記の未了を続けて完成させて。完成したらコミット・push・VPS反映。」
+**English**: v0.1.1 bundles open-cpu into generated projects (`--no-open-cpu` to opt out) and adds `deps --apply --verify "<tests>"` (restores from `.2poem.bak` on failure). aruaru-llm is intentionally NOT bundled (too slow on the VPS, and against the shared-base policy). The RMojo updater was verified on WSL Ubuntu against the real v0.4.3 tar.gz (download, SHA-256, replace). **Open**: update tests on macOS/Android/iOS, auto-upgrade of users' own Flask/Django/React stacks, automatic business-logic porting, CI for generated RPoem projects, PyPI publication (deferred).
+**Resume message**: "Open `F:\2Poem` and `F:\runo`, run `python -m pytest -q` (20 tests), then continue the open items in the 2026-11-17 addendum of PORTING.md; when done, commit, push and deploy to the VPS."

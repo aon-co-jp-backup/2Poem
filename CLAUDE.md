@@ -5,3 +5,4 @@
 - 試験: `python -m pytest -q`。生成物のコンパイル確認は `2poem convert examples/... -o OUT` → `cargo check`(RPoem は `--rpoem-path`)。
 - 自動更新: `_autoupdate.py`(2FastAPI/MFastAPI と同じ流儀。`TOPOEM_NO_UPDATE=1` で停止)。リリースに `.sha256` が要る(CI が付ける)。
 - 注意: PowerShell 5.1 で日本語を含むファイルを書かない。
+- 2026-11-17 v0.1.1: 生成物に open-cpu 同梱、`deps --verify`。aruaru-llm は意図的に非同梱。未了と再開用メッセージ(日英)は `PORTING.md` 末尾。/ v0.1.1: open-cpu bundled in generated projects, `deps --verify`; aruaru-llm intentionally not bundled. Open items and the resume message (JA/EN) are at the end of PORTING.md.

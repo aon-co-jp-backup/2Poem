@@ -41,6 +41,8 @@ jobs:
         with: { path: 2Poem }
       - uses: actions/checkout@v4
         with: { repository: aon-co-jp/RPoem, path: RPoem }
+      - uses: actions/checkout@v4
+        with: { repository: aon-co-jp/open-web-server, path: open-web-server }
       - uses: actions/setup-python@v5
         with: { python-version: "3.x" }
       - run: python -m pip install -e ./2Poem

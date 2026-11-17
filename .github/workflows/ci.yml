@@ -1,0 +1,59 @@
+name: ci
+on:
+  push: { branches: [main], tags: ['v*'] }
+  pull_request:
+  schedule:
+    - cron: '23 3 * * *'   # 毎日: 最新の Python / Poem / 上流で再試験
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.12", "3.x"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - run: python -m pip install -e ".[test]"
+      - run: python -m pytest -q
+  generated-rust:
+    # 変換結果(Poem 向け)が、その時点で最新の poem でコンパイルできること
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - run: python -m pip install -e .
+      - run: |
+          for f in flask_app.py fastapi_app.py; do
+            2poem convert examples/$f -o out/${f%.py} --target poem --name app_${f%.py}
+            (cd out/${f%.py} && cargo check)
+          done
+  upstream-issue:
+    if: failure() && github.event_name == 'schedule'
+    needs: [test, generated-rust]
+    runs-on: ubuntu-latest
+    permissions: { issues: write }
+    steps:
+      - env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          t="upstream: 最新版での定期試験が失敗 ($(date -u +%F))"
+          gh issue list -R "$GITHUB_REPOSITORY" --state open --search "$t in:title" --json number -q '.[0].number' | grep -q . || \
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$t" --body "最新の上流(Python・Poem など)で定期試験が失敗しました。実行: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, generated-rust]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python -m pip install build && python -m build
+      - name: sha256 for every asset (used by the startup self-update)
+        run: cd dist && for f in *; do sha256sum "$f" > "$f.sha256"; done
+      - uses: softprops/action-gh-release@v2
+        with: { files: "dist/*" }

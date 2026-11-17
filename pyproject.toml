@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topoem"
+version = "0.1.0"
+description = "Convert Flask / Django / FastAPI systems to Rust + Poem or RPoem, and follow new releases of Python, Rust, JavaScript, TypeScript, React, Bootstrap, WunderGraph Cosmo and databases."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+"2poem" = "topoem.cli:main"
+topoem = "topoem.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -18,7 +18,7 @@ def _convert(a):
         text, _ = emit.render_main(routes, target, warnings)
         print(text)
     else:
-        warnings += emit.generate(routes, out, target, name=a.name, poem_version=pv, rpoem_path=a.rpoem_path, source_root=a.path)
+        warnings += emit.generate(routes, out, target, name=a.name, poem_version=pv, rpoem_path=a.rpoem_path, source_root=a.path, open_cpu=not a.no_open_cpu)
     print("// frameworks: %s | python2 files: %d | routes: %d | target: %s%s" % (", ".join(fws) or "none", len(py2), len(routes), target, "" if a.dry_run else " | wrote: " + out), file=sys.stderr)
     for w in warnings:
         print("warning: " + w, file=sys.stderr)
@@ -72,8 +72,15 @@ def _deps(a):
     for msg in deps.react_report(items):
         print("react: " + msg)
     if a.apply:
-        for path, name, old, new in deps.apply(a.path, items, allow_major=a.major):
+        if a.verify:
+            changes, code, restored = deps.apply_verified(a.path, items, a.verify, allow_major=a.major)
+        else:
+            changes, code, restored = deps.apply(a.path, items, allow_major=a.major), 0, False
+        for path, name, old, new in changes:
             print("updated %s: %s %s -> %s" % (path, name, old, new))
+        if restored:
+            print("verify failed (exit %d): restored the original files" % code, file=sys.stderr)
+            return 1
     return 0
 
 
@@ -97,6 +104,7 @@ def main(argv=None):
     c.add_argument("--name", default="converted-app")
     c.add_argument("--poem-version", default=None, help="default: latest stable from crates.io")
     c.add_argument("--rpoem-path", default="../RPoem")
+    c.add_argument("--no-open-cpu", action="store_true", help="do not add open-cpu (CPU feature detection) to the generated project")
     c.add_argument("--dry-run", action="store_true", help="print main.rs only")
     c.set_defaults(fn=_convert)
     s = sub.add_parser("scan", help="list routes found")
@@ -110,6 +118,7 @@ def main(argv=None):
     d = sub.add_parser("deps", help="detect JS/TS/React/Bootstrap/Cosmo/DB/Python dependencies and bump them")
     d.add_argument("path")
     d.add_argument("--apply", action="store_true", help="rewrite package.json / requirements*.txt (backup: .2poem.bak)")
+    d.add_argument("--verify", default=None, help="command to run after --apply (e.g. \"npm test\"); on failure the original files are restored")
     d.add_argument("--major", action="store_true", help="also apply major-version bumps")
     d.add_argument("--json", action="store_true")
     d.set_defaults(fn=_deps)

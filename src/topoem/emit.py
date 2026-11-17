@@ -10,6 +10,7 @@ from .extract import Route
 
 DEFAULT_POEM = "3"
 RPOEM_REL = "../RPoem"
+CPU_LINE = "    // 起動時にCPUの命令セット(AVX-512 / AVX2 / NEON など)を検出して表示する(open-cpu。--no-open-cpu で外せる)\n    println!(\"{}\", open_cpu::runtime_report());\n"
 
 
 def choose_target(frameworks):
@@ -100,7 +101,7 @@ def _rpoem_handler(r, name):
     return "%s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, %s: Params) -> Response {\n%s\n    // TODO: Python の本体を移植する(戻りの種類の推定: %s)\n    %s\n}\n" % (_comment(r), name, unused, "\n".join(lines), r.returns, body)
 
 
-def render_main(routes, target, warnings_out):
+def render_main(routes, target, warnings_out, open_cpu=True):
     items = _unique(routes)
     groups = _group_by_path(items)
     by_name = {name: r for r, m, name in items}
@@ -132,12 +133,12 @@ def render_main(routes, target, warnings_out):
         head = "use open_runo_poem_compat::{%s, Json, Params, Request, Response, Route, Server, StatusCode, TcpListener};\n" % ", ".join(sorted(set(used)))
         tail = (
             "\n#[tokio::main]\nasync fn main() {\n    let app = Route::new()\n%s;\n"
-            "    let (addr, handle) = Server::new(TcpListener::bind(([0, 0, 0, 0], 3000))).run(app).await.expect(\"bind :3000\");\n"
+            "%s    let (addr, handle) = Server::new(TcpListener::bind(([0, 0, 0, 0], 3000))).run(app).await.expect(\"bind :3000\");\n"
             "    println!(\"listening on {addr}\");\n    handle.await.ok();\n}\n"
-        ) % "\n".join(route_lines)
+        ) % ("\n".join(route_lines), CPU_LINE if open_cpu else "")
     else:
         head = "use poem::{%s, handler, listener::TcpListener, web::{Json, Path}, Route, Server};\nuse serde_json::{json, Value};\n" % ", ".join(sorted(set(used)))
-        tail = "\n#[tokio::main]\nasync fn main() -> Result<(), std::io::Error> {\n    let app = Route::new()\n%s;\n    Server::new(TcpListener::bind(\"0.0.0.0:3000\")).run(app).await\n}\n" % "\n".join(route_lines)
+        tail = "\n#[tokio::main]\nasync fn main() -> Result<(), std::io::Error> {\n%s    let app = Route::new()\n%s;\n    Server::new(TcpListener::bind(\"0.0.0.0:3000\")).run(app).await\n}\n" % (CPU_LINE if open_cpu else "", "\n".join(route_lines))
     if not routes:
         tail = tail.replace("Route::new()\n;", "Route::new();")
     # 使われていない Path の import による警告を避ける
@@ -145,21 +146,26 @@ def render_main(routes, target, warnings_out):
     return text, by_name
 
 
-def render_cargo(name, target, poem_version, rpoem_path):
+OPEN_CPU_DEP = 'open-cpu = { git = "https://github.com/aon-co-jp/open-cpu" }\n'
+
+
+def render_cargo(name, target, poem_version, rpoem_path, open_cpu=True):
     if target == "rpoem":
         deps = 'open-runo-poem-compat = { path = "%s/crates/open-runo-poem-compat" }\nopen-runo-poem-compat-macro = { path = "%s/crates/open-runo-poem-compat-macro" }\nopen-runo-view = { path = "%s/crates/open-runo-view" }\nserde_json = "1"\n' % (rpoem_path, rpoem_path, rpoem_path)
     else:
         deps = 'poem = "%s"\nserde_json = "1"\n' % poem_version
+    if open_cpu:
+        deps += OPEN_CPU_DEP
     return '[package]\nname = "%s"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n%stokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }\n' % (name, deps)
 
 
-def generate(routes, out_dir, target, name="converted-app", poem_version=DEFAULT_POEM, rpoem_path=RPOEM_REL, source_root=None):
+def generate(routes, out_dir, target, name="converted-app", poem_version=DEFAULT_POEM, rpoem_path=RPOEM_REL, source_root=None, open_cpu=True):
     """プロジェクトを書き出す。警告(文字列のリスト)を返す。"""
     warnings = []
     os.makedirs(os.path.join(out_dir, "src"), exist_ok=True)
-    main, _ = render_main(routes, target, warnings)
+    main, _ = render_main(routes, target, warnings, open_cpu)
     with open(os.path.join(out_dir, "Cargo.toml"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(render_cargo(name, target, poem_version, rpoem_path))
+        f.write(render_cargo(name, target, poem_version, rpoem_path, open_cpu))
     with open(os.path.join(out_dir, "src", "main.rs"), "w", encoding="utf-8", newline="\n") as f:
         f.write(main)
     with open(os.path.join(out_dir, ".gitignore"), "w", encoding="utf-8", newline="\n") as f:

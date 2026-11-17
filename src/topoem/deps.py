@@ -181,3 +181,32 @@ def react_report(items):
     if r is not None and r < 16:
         out.append("react %s は Hooks 以前の版です。16.8 以上への更新を検討してください" % cur["react"])
     return out
+
+
+def restore(changes):
+    """apply() が残した `.2poem.bak` から元へ戻す。戻したファイルの一覧を返す。"""
+    done = []
+    for path in sorted({c[0] for c in changes}):
+        bak = path + ".2poem.bak"
+        if os.path.exists(bak):
+            with open(bak, encoding="utf-8", newline="") as f:
+                text = f.read()
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            done.append(path)
+    return done
+
+
+def apply_verified(root, deps, command, allow_major=False, run=None):
+    """版を書き換え → `command`(試験コマンド)を `root` で実行 → 失敗したら元へ戻す。(変更, 試験の終了コード, 戻したか)"""
+    import subprocess
+
+    run = run or (lambda cmd, cwd: subprocess.call(cmd, shell=True, cwd=cwd))
+    changes = apply(root, deps, allow_major=allow_major)
+    if not changes:
+        return changes, 0, False
+    code = run(command, root if os.path.isdir(root) else os.path.dirname(root) or ".")
+    if code != 0:
+        restore(changes)
+        return changes, code, True
+    return changes, 0, False

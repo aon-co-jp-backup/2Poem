@@ -33,3 +33,8 @@ pip install topoem            # (リリースの wheel から。PyPI 公開は�
 PyPI 公開(所有者のアカウントが必要)、生成した RPoem プロジェクトの CI での検証(RPoem の取得が重い。手元では `cargo check` 済み)、業務ロジックの自動移植、Django ORM・テンプレートの変換、macOS/Linux 実機でのインストール試験。
 
 MIT License.
+
+## v0.1.1 の追加 / Added in v0.1.1
+- 生成する Rust プロジェクトに open-cpu を既定で同梱(`--no-open-cpu` で外せる)。aruaru-llm は、VPS での推論が遅すぎる(GPT-2 で60秒超)ため**同梱していません**(共有基盤方針: VPS に1回だけ入れて呼ぶ)。
+- `2poem deps --apply --verify "<試験コマンド>"`: 版を書き換えた後に試験を実行し、失敗したら元のファイルへ自動で戻す。
+- Generated Rust projects bundle open-cpu by default (`--no-open-cpu` to opt out); aruaru-llm is intentionally not bundled (too slow on the VPS). `deps --verify` restores the originals if tests fail.

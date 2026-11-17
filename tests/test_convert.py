@@ -140,3 +140,27 @@ def test_deps_detect_analyze_apply(tmp_path):
 def test_frontend_report_none_when_no_frontend(tmp_path):
     (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
     assert frontend.render_report(frontend.scan_frontend(str(tmp_path)), str(tmp_path)) is None
+
+
+def test_open_cpu_is_in_generated_projects_by_default(tmp_path):
+    r, _, _, _ = routes_of("flask_app.py")
+    out = tmp_path / "a"
+    emit.generate(r, str(out), "poem")
+    assert "open-cpu" in (out / "Cargo.toml").read_text(encoding="utf-8")
+    assert "open_cpu::runtime_report()" in (out / "src" / "main.rs").read_text(encoding="utf-8")
+    out2 = tmp_path / "b"
+    emit.generate(r, str(out2), "poem", open_cpu=False)
+    assert "open-cpu" not in (out2 / "Cargo.toml").read_text(encoding="utf-8")
+    assert "open_cpu" not in (out2 / "src" / "main.rs").read_text(encoding="utf-8")
+
+
+def test_apply_verified_restores_on_failure(tmp_path):
+    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {"react": "^18.0.0"}}), encoding="utf-8")
+    items = deps.analyze(str(tmp_path), fake_get)
+    ch, code, restored = deps.apply_verified(str(tmp_path), items, "x", allow_major=True, run=lambda cmd, cwd: 1)
+    assert ch and code == 1 and restored
+    assert json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))["dependencies"]["react"] == "^18.0.0"
+    items = deps.analyze(str(tmp_path), fake_get)
+    ch, code, restored = deps.apply_verified(str(tmp_path), items, "x", allow_major=True, run=lambda cmd, cwd: 0)
+    assert ch and code == 0 and not restored
+    assert json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))["dependencies"]["react"] == "^19.0.0"

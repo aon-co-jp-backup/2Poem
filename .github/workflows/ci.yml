@@ -33,6 +33,20 @@ jobs:
             2poem convert examples/$f -o out/${f%.py} --target poem --name app_${f%.py}
             (cd out/${f%.py} && cargo check)
           done
+  generated-rpoem:
+    # 変換結果(RPoem 向け、Django の例)が RPoem でコンパイルできること
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: 2Poem }
+      - uses: actions/checkout@v4
+        with: { repository: aon-co-jp/RPoem, path: RPoem }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.x" }
+      - run: python -m pip install -e ./2Poem
+      - run: |
+          2poem convert 2Poem/examples/django_proj -o out/dj --target rpoem --rpoem-path "$GITHUB_WORKSPACE/RPoem" --name app_dj
+          cd out/dj && cargo check
   upstream-issue:
     if: failure() && github.event_name == 'schedule'
     needs: [test, generated-rust]

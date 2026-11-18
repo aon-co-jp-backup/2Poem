@@ -47,6 +47,10 @@ jobs:
         with: { repository: aon-co-jp/RS-SmartTCP, path: RS-SmartTCP }
       - uses: actions/checkout@v4
         with: { repository: aon-co-jp/open-raid-z, path: open-raid-z }
+      - uses: actions/checkout@v4
+        with: { repository: aon-co-jp/open-cpu, path: open-cpu }
+      - uses: actions/checkout@v4
+        with: { repository: aon-co-jp/RS-JSON, path: RS-JSON }
       - uses: actions/setup-python@v5
         with: { python-version: "3.x" }
       - run: python -m pip install -e ./2Poem

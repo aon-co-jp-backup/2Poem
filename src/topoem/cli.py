@@ -72,8 +72,11 @@ def _deps(a):
     for msg in deps.react_report(items):
         print("react: " + msg)
     if a.apply:
-        if a.verify:
-            changes, code, restored = deps.apply_verified(a.path, items, a.verify, allow_major=a.major)
+        verify = deps.detect_test_command(a.path) if a.verify == "auto" else a.verify
+        if a.verify == "auto":
+            print("verify command: %s" % (verify or "(試験が見つからないため、検証なしで書き換えます)"))
+        if verify:
+            changes, code, restored = deps.apply_verified(a.path, items, verify, allow_major=a.major)
         else:
             changes, code, restored = deps.apply(a.path, items, allow_major=a.major), 0, False
         for path, name, old, new in changes:
@@ -118,7 +121,7 @@ def main(argv=None):
     d = sub.add_parser("deps", help="detect JS/TS/React/Bootstrap/Cosmo/DB/Python dependencies and bump them")
     d.add_argument("path")
     d.add_argument("--apply", action="store_true", help="rewrite package.json / requirements*.txt (backup: .2poem.bak)")
-    d.add_argument("--verify", default=None, help="command to run after --apply (e.g. \"npm test\"); on failure the original files are restored")
+    d.add_argument("--verify", default=None, help="command to run after --apply (e.g. \"npm test\"; \"auto\" detects npm test / manage.py test / pytest / cargo test); on failure the original files are restored")
     d.add_argument("--major", action="store_true", help="also apply major-version bumps")
     d.add_argument("--json", action="store_true")
     d.set_defaults(fn=_deps)

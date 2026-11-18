@@ -164,3 +164,11 @@ def test_apply_verified_restores_on_failure(tmp_path):
     ch, code, restored = deps.apply_verified(str(tmp_path), items, "x", allow_major=True, run=lambda cmd, cwd: 0)
     assert ch and code == 0 and not restored
     assert json.loads((tmp_path / "package.json").read_text(encoding="utf-8"))["dependencies"]["react"] == "^19.0.0"
+
+
+def test_detect_test_command(tmp_path):
+    assert deps.detect_test_command(str(tmp_path)) is None
+    (tmp_path / "package.json").write_text(json.dumps({"scripts": {"test": "jest"}}), encoding="utf-8")
+    (tmp_path / "manage.py").write_text("", encoding="utf-8")
+    (tmp_path / "Cargo.toml").write_text("", encoding="utf-8")
+    assert deps.detect_test_command(str(tmp_path)) == "npm test && python manage.py test && cargo test"

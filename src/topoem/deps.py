@@ -210,3 +210,25 @@ def apply_verified(root, deps, command, allow_major=False, run=None):
         restore(changes)
         return changes, code, True
     return changes, 0, False
+
+
+def detect_test_command(root):
+    """プロジェクトの試験コマンドを推定する(見つかったものを `&&` でつなぐ)。無ければ None。"""
+    base = root if os.path.isdir(root) else os.path.dirname(root) or "."
+    cmds = []
+    pj = os.path.join(base, "package.json")
+    if os.path.exists(pj):
+        try:
+            with open(pj, encoding="utf-8") as f:
+                scripts = (json.load(f) or {}).get("scripts") or {}
+            if scripts.get("test"):
+                cmds.append("npm test")
+        except (OSError, ValueError):
+            pass
+    if os.path.exists(os.path.join(base, "manage.py")):
+        cmds.append("python manage.py test")
+    elif os.path.isdir(os.path.join(base, "tests")) or os.path.exists(os.path.join(base, "pytest.ini")):
+        cmds.append("python -m pytest -q")
+    if os.path.exists(os.path.join(base, "Cargo.toml")):
+        cmds.append("cargo test")
+    return " && ".join(cmds) or None

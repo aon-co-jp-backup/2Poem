@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topoem"
-version = "0.1.1"
+version = "0.1.2"
 description = "Convert Flask / Django / FastAPI systems to Rust + Poem or RPoem, and follow new releases of Python, Rust, JavaScript, TypeScript, React, Bootstrap, WunderGraph Cosmo and databases."
 readme = "README.md"
 license = { text = "MIT" }

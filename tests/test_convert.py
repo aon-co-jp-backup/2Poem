@@ -172,3 +172,41 @@ def test_detect_test_command(tmp_path):
     (tmp_path / "manage.py").write_text("", encoding="utf-8")
     (tmp_path / "Cargo.toml").write_text("", encoding="utf-8")
     assert deps.detect_test_command(str(tmp_path)) == "npm test && python manage.py test && cargo test"
+
+
+def _ported(tmp_path, src):
+    f = tmp_path / "a.py"
+    f.write_text(src, encoding="utf-8")
+    r, _, _, _ = extract.extract_project(str(f))
+    return {x.handler: x for x in r}
+
+
+def test_simple_bodies_are_ported(tmp_path):
+    by = _ported(tmp_path, '''from flask import Flask, jsonify
+app = Flask(__name__)
+@app.route("/ping")
+def ping():
+    """doc"""
+    return {"ok": True, "n": 1, "tags": ["a"], "none": None}
+@app.route("/hello/<name>")
+def hello(name):
+    return jsonify({"hello": name, "q": "a\\"b"})
+@app.route("/t")
+def t():
+    return "plain"
+@app.route("/c/<int:a>")
+def c(a):
+    return {"r": a * 2}
+@app.route("/m")
+def m():
+    x = 1
+    return {"x": x}
+''')
+    assert by["ping"].ported == '{"ok": true, "n": 1, "tags": ["a"], "none": null}' and by["ping"].ported_kind == "json"
+    assert by["hello"].ported == '{"hello": name, "q": "a\\"b"}'
+    assert by["t"].ported == '"plain"' and by["t"].ported_kind == "text"
+    assert by["c"].ported == "" and by["m"].ported == ""  # 計算・複数文は自動では移植しない(TODO のまま)
+    text, _ = emit.render_main(list(by.values()), "poem", [])
+    assert 'Json(json!({"ok": true' in text and '"plain".to_string()' in text and "TODO" in text
+    rtext, _ = emit.render_main(list(by.values()), "rpoem", [])
+    assert "serde_json::json!({\"ok\": true" in rtext

@@ -29,6 +29,8 @@ class Route:
     line: int = 0
     returns: str = "json"  # json | html | text | unknown
     notes: list = field(default_factory=list)
+    ported: str = ""  # 自動で移植できた応答(Rust の json! 式)。空なら TODO のまま
+    ported_kind: str = ""  # json | text
 
 
 def _const_str(n):
@@ -113,6 +115,61 @@ def _returns_kind(func):
     return kinds.pop() if len(kinds) == 1 else ("json" if "json" in kinds else "unknown")
 
 
+def _ident(name):
+    s = re.sub(r"\W", "_", name).lower().strip("_") or "x"
+    return "h_" + s if s[0].isdigit() else s
+
+
+def _lit(n, names):
+    """Python の式(定数・パラメータ名・それらの dict/list)を Rust の json! の中身にする。できなければ None。"""
+    if isinstance(n, ast.Constant):
+        v = n.value
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, (int, float)):
+            return repr(v)
+        if isinstance(v, str):
+            return '"' + v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
+        return None
+    if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.USub) and isinstance(n.operand, ast.Constant) and isinstance(n.operand.value, (int, float)) and not isinstance(n.operand.value, bool):
+        return "-" + repr(n.operand.value)
+    if isinstance(n, ast.Name) and n.id in names:
+        return _ident(n.id)
+    if isinstance(n, (ast.List, ast.Tuple)):
+        items = [_lit(e, names) for e in n.elts]
+        return None if any(i is None for i in items) else "[" + ", ".join(items) + "]"
+    if isinstance(n, ast.Dict):
+        out = []
+        for k, v in zip(n.keys, n.values):
+            if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+                return None
+            lv = _lit(v, names)
+            if lv is None:
+                return None
+            out.append("%s: %s" % (_lit(k, names), lv))
+        return "{" + ", ".join(out) + "}"
+    return None
+
+
+def port_body(func, param_names):
+    """本体が(docstring を除いて)単一の return で、その値が定数・パラメータ・dict/list だけなら (種類, Rust 式)。それ以外は ("", "")。"""
+    body = [b for b in func.body if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant) and isinstance(b.value.value, str))]
+    if len(body) != 1 or not isinstance(body[0], ast.Return) or body[0].value is None:
+        return "", ""
+    v = body[0].value
+    if isinstance(v, ast.Call) and v.args and ast.unparse(v.func).endswith(("jsonify", "JSONResponse", "JsonResponse")):
+        v = v.args[0]
+    elif isinstance(v, ast.Call) and v.args and ast.unparse(v.func).endswith(("HttpResponse", "PlainTextResponse", "Response")):
+        t = _lit(v.args[0], param_names)
+        return ("text", t) if t and t.startswith('"') else ("", "")
+    lit = _lit(v, param_names)
+    if lit is None:
+        return "", ""
+    return ("text" if isinstance(v, ast.Constant) and isinstance(v.value, str) else "json"), lit
+
+
 def _snippet(src_lines, func, limit=8):
     seg = src_lines[func.lineno - 1 : min(func.end_lineno, func.lineno - 1 + limit)]
     return "\n".join(seg)
@@ -149,7 +206,9 @@ def _decorator_routes(tree, src, file):
                 fw = "fastapi" if fw is None else fw
             if not path.startswith("/"):
                 path = "/" + path
-            out.append(Route(fw, methods, path, node.name, params, _snippet(lines, node), file, node.lineno, _returns_kind(node)))
+            r = Route(fw, methods, path, node.name, params, _snippet(lines, node), file, node.lineno, _returns_kind(node))
+            r.ported_kind, r.ported = port_body(node, {p.name for p in params})
+            out.append(r)
     return out
 
 
@@ -173,6 +232,9 @@ def _django_routes(tree, src, file, views):
             continue  # include(...) などは追わない
         path, params = _django_path(raw)
         r = Route("django", methods, path, name, params, snippet, file, node.lineno, kind)
+        fn = views.get(name, {}).get("func")
+        if fn is not None and not isinstance(target, ast.Call):
+            r.ported_kind, r.ported = port_body(fn, {p.name for p in params})
         if isinstance(target, ast.Call) or node.func.id == "re_path":
             r.notes.append("Django の正規表現/クラスベースビューは、メソッドとパスを推定しました")
         out.append(r)
@@ -184,7 +246,7 @@ def _collect_views(tree, src):
     views = {}
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            views[node.name] = {"source": _snippet(lines, node), "returns": _returns_kind(node)}
+            views[node.name] = {"source": _snippet(lines, node), "returns": _returns_kind(node), "func": node}
         elif isinstance(node, ast.ClassDef):
             ms = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in HTTP]
             views[node.name] = {"methods": ms or ["get"], "source": _snippet(lines, node), "returns": "json"}

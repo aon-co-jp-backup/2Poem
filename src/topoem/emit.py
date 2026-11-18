@@ -66,6 +66,10 @@ def _poem_handler(r, name):
         args = "Path(%s): Path<%s>" % (rust_ident(p.name), p.rust)
     elif len(r.params) > 1:
         args = "Path((%s)): Path<(%s)>" % (", ".join(rust_ident(p.name) for p in r.params), ", ".join(p.rust for p in r.params))
+    if r.ported and r.ported_kind == "text":
+        return "%s\n#[handler]\nasync fn %s(%s) -> String {\n    // 自動移植: 元の本体は定数/パラメータだけを返す単純な関数\n    %s.to_string()\n}\n" % (_comment(r), name, args, r.ported)
+    if r.ported:
+        return "%s\n#[handler]\nasync fn %s(%s) -> Json<Value> {\n    // 自動移植: 元の本体は定数/パラメータだけを返す単純な関数\n    Json(json!(%s))\n}\n" % (_comment(r), name, args, r.ported)
     pj = ", ".join('"%s": %s' % (p.name, rust_ident(p.name)) for p in r.params)
     body = 'Json(json!({"todo": "%s"%s}))' % (name, (", " + pj) if pj else "")
     return "%s\n#[handler]\nasync fn %s(%s) -> Json<Value> {\n    // TODO: Python の本体を移植する(戻りの種類の推定: %s)\n    %s\n}\n" % (_comment(r), name, args, r.returns, body)
@@ -97,6 +101,12 @@ def _rpoem_handler(r, name):
         lines.append('    let %s: %s = params.get("%s").and_then(|s| s.parse().ok()).unwrap_or_default();' % (ident, p.rust, p.name))
     pj = ", ".join('"%s": %s' % (p.name, rust_ident(p.name)) for p in r.params)
     unused = "params" if r.params else "_params"
+    if r.ported and r.ported_kind == "text":
+        body = 'open_runo_poem_compat::hyper_compat::html_response(StatusCode::OK, %s.to_string())' % r.ported
+        return "%s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, %s: Params) -> Response {\n%s\n    // 自動移植: 元の本体は定数/パラメータだけを返す単純な関数\n    %s\n}\n" % (_comment(r), name, unused, "\n".join(lines), body)
+    if r.ported:
+        body = 'Json(serde_json::json!(%s)).into_response(StatusCode::OK)' % r.ported
+        return "%s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, %s: Params) -> Response {\n%s\n    // 自動移植: 元の本体は定数/パラメータだけを返す単純な関数\n    %s\n}\n" % (_comment(r), name, unused, "\n".join(lines), body)
     body = 'Json(serde_json::json!({"todo": "%s"%s})).into_response(StatusCode::OK)' % (name, (", " + pj) if pj else "")
     return "%s\n#[open_runo_poem_compat_macro::handler]\nasync fn %s(_req: Request, %s: Params) -> Response {\n%s\n    // TODO: Python の本体を移植する(戻りの種類の推定: %s)\n    %s\n}\n" % (_comment(r), name, unused, "\n".join(lines), r.returns, body)
 
@@ -142,7 +152,7 @@ def render_main(routes, target, warnings_out, open_cpu=True):
     if not routes:
         tail = tail.replace("Route::new()\n;", "Route::new();")
     # 使われていない Path の import による警告を避ける
-    text = "//! 2Poem が生成した骨組み(%s)。ルーティングとパスパラメータの型は写してあり、各ハンドラの本体は TODO。\n#![allow(unused_variables, unused_imports)]\n%s\n%s%s" % (target, head, "\n".join(handlers), tail)
+    text = "//! 2Poem が生成した骨組み(%s)。ルーティングとパスパラメータの型は写してあり、単純な本体(定数・パラメータだけを返す)は自動移植、それ以外のハンドラの本体は TODO。\n#![allow(unused_variables, unused_imports)]\n%s\n%s%s" % (target, head, "\n".join(handlers), tail)
     return text, by_name
 
 
